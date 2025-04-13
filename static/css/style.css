@@ -1,0 +1,166 @@
+/* Common styles for all pages */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: #333;
+}
+
+h2 {
+    text-align: center;
+    color: #333;
+}
+
+.container {
+    max-width: 500px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #ffffff;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #333;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+/* Styles for the login page */
+form {
+    max-width: 400px;
+    margin: 10px auto;
+    text-align: left;
+}
+
+form p {
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+p a {
+    color: #4CAF50;
+    text-decoration: none;
+}
+
+p a:hover {
+    text-decoration: underline;
+}
+
+/* Specific styles for user_dashboard.html */
+.user-dashboard {
+    width: 600px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.user-dashboard h2 {
+    margin-top: 0;
+    text-align: center;
+    color: #333;
+}
+
+.user-dashboard h3 {
+    color: #4CAF50;
+    margin-top: 20px;
+}
+
+.user-dashboard div {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.user-dashboard form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.user-dashboard input[type="file"] {
+    width: auto;
+    margin: 0;
+}
+
+#fileList {
+    margin-top: 15px;
+}
+
+.user-dashboard button {
+    margin-top: 10px;
+}
+
+/* Resource Monitoring Section */
+.resource-monitor {
+    text-align: left;
+    color: #333;
+}
+
+.resource-monitor p {
+    margin: 5px 0;
+}
+
+.flash-messages {
+    padding: 10px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    width: fit-content;
+}
+
+form button {
+    background-color: #ff4c4c;  /* Red color for logout */
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+form button:hover {
+    background-color: #e60000;
+}

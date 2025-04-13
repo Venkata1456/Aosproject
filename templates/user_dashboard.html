@@ -1,0 +1,77 @@
+<!-- templates/user_dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+     <!-- Display Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div id="flash-messages">
+        {% for category, message in messages %}
+            <p class="flash-{{ category }}">{{ message }}</p>
+        {% endfor %}
+        </div>
+        <script>
+        // Automatically hide flash messages after 3 seconds
+        setTimeout(function() {
+            const flashMessages = document.getElementById("flash-messages");
+            if (flashMessages) {
+            flashMessages.style.display = 'none';
+            }
+        }, 3000);
+        </script>
+    {% endif %}
+    {% endwith %}
+
+   
+    <h2>Welcome, {{ username }}</h2>
+    <p>Logged in as User</p>
+
+     <!-- Logout Button -->
+     <form action="{{ url_for('logout') }}" method="GET">
+        <button type="submit">Logout</button>
+    </form>
+
+    {% if read_access %}
+        <div>
+            <h3>File Management</h3>
+            {% if write_access %}
+                <form id="uploadForm" action="/upload_file" method="POST" enctype="multipart/form-data">
+                    <input type="file" name="file">
+                    <button type="submit">Upload File</button>
+                </form>
+            {% else %}
+                <p>You do not have write access. File upload is disabled.</p>
+            {% endif %}
+
+            <button onclick="listFiles()">List Files</button>
+            <div id="fileList" {% if write_access %}allowChanges{% endif %}></div>
+        </div>
+    {% else %}
+        <p>You do not have permission to view files.</p>
+    {% endif %}
+
+    {% if write_access %}
+        <div>
+            <h3>Folder Management</h3>
+            <button onclick="createFolder()">Create Folder</button>
+            <button onclick="renameFolder()">Rename Folder</button>
+            <button onclick="deleteFolder()">Delete Folder</button>
+            <div id="folderList"></div>
+        </div>
+    {% endif %}
+
+    <div>
+        <h3>Resource Monitoring</h3>
+        <p>Disk Usage: {{ disk_usage }}</p>
+        <p>CPU Usage: {{ cpu_usage }}%</p>
+        <p>RAM Usage: {{ ram_usage }}</p>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

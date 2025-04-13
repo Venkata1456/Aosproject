@@ -1,0 +1,111 @@
+<!-- templates/admin_dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Display Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div id="flash-messages">
+        {% for category, message in messages %}
+            <p class="flash-{{ category }}">{{ message }}</p>
+        {% endfor %}
+        </div>
+        <script>
+        // Automatically hide flash messages after 3 seconds
+        setTimeout(function() {
+            const flashMessages = document.getElementById("flash-messages");
+            if (flashMessages) {
+            flashMessages.style.display = 'none';
+            }
+        }, 3000);
+        </script>
+    {% endif %}
+    {% endwith %}
+
+    <h2>Welcome, Admin {{ username }}</h2>
+    <p>Logged in as Admin</p>
+
+     <!-- Logout Button -->
+     <form action="{{ url_for('logout') }}" method="GET">
+        <button type="submit">Logout</button>
+    </form>
+
+    <!-- User Access Management -->
+    <div>
+        <h3>User Access Management</h3>
+        <table>
+            <tr>
+                <th>Username</th>
+                <th>Read Access</th>
+                <th>Write Access</th>
+                <th>Update</th>
+                <th>Delete Account</th>
+            </tr>
+            {% for user in users %}
+            <tr>
+                <td>{{ user['username'] }}</td>
+                <td>
+                    <input type="checkbox" id="readAccess_{{ user['username'] }}" {% if user.read_access %}checked{% endif %} 
+                           onclick="updateAccess('{{ user.username }}', 'read', this.checked)">
+                </td>
+                <td>
+                    <input type="checkbox" id="writeAccess_{{ user['username'] }}" {% if user.write_access %}checked{% endif %} 
+                           onclick="updateAccess('{{ user.username }}', 'write', this.checked)">
+                </td>
+                <td>
+                    <button onclick="applyChanges('{{ user.username }}')">Update</button>
+                </td>
+                <td>
+                    <form action="{{ url_for('delete_user') }}" method="POST" style="display:inline;">
+                        <input type="hidden" name="username" value="{{ user['username'] }}">
+                        <button type="submit" style="margin-top:0px !important;"">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div>
+        <h3>File Management</h3>
+        <form id="uploadForm" action="/upload_file" method="POST" enctype="multipart/form-data">
+            <input type="file" name="file">
+            <button type="submit">Upload File</button>
+        </form>
+
+        <button onclick="listFiles()">List All User Files</button>
+        <div id="fileList"></div>
+    </div>
+
+    <div>
+        <h3>File Management</h3>
+        <button onclick="location.href='{{ url_for('backup_files') }}'">Backup All Files</button>
+        <button onclick="location.href='{{ url_for('restore_backup', backup_folder='backup_folder_name') }}'">Restore Backup</button>
+    </div>
+
+    <div>
+        <h3>Backup List</h3>
+        <!-- You can display a list of backup folders here -->
+        {% for backup in backups %}
+            <div>
+                <p>{{ backup }}</p>
+                <a href="{{ url_for('restore_backup', backup_folder=backup) }}">Download Restore</a>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div>
+        <h3>System Monitoring</h3>
+        <p>Disk Usage: {{ disk_usage }}</p>
+        <p>CPU Usage: {{ cpu_usage }}%</p>
+        <p>RAM Usage: {{ ram_usage }}</p>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
