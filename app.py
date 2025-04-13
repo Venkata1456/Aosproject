@@ -1,382 +1,232 @@
-# app.py
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_from_directory
 import os
 import pymysql
-from werkzeug.security import generate_password_hash, check_password_hash
 import psutil
 import shutil
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
-
-app = Flask(__name__)
-app.secret_key = 'your_secret_key'
-
-# Database configuration
-db_config = {
+# Config
+BASE_DIR = 'C:/NAS_Server_Files'
+SECRET_KEY = 'my_secret'
+DB_DETAILS = {
     'host': 'localhost',
     'user': 'root',
     'password': 'Subbupa1&',
     'database': 'nas_management'
 }
 
-UPLOAD_FOLDER = 'C:/NAS_Server_Files'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app = Flask(__name__)
+app.secret_key = SECRET_KEY
+app.config['UPLOAD_DIR'] = BASE_DIR
 
-# Helper function to connect to MySQL
-def get_db_connection():
-    return pymysql.connect(**db_config, cursorclass=pymysql.cursors.DictCursor)
+
+# DB Connector
+def db():
+    return pymysql.connect(**DB_DETAILS, cursorclass=pymysql.cursors.DictCursor)
+
 
 @app.route('/')
-def home():
+def index():
     return redirect('/login')
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
-        user = cursor.fetchone()
+@app.route('/login', methods=['GET', 'POST'])
+def login_view():
+    if request.method == 'POST':
+        uname = request.form['username']
+        passwd = request.form['password']
+
+        conn = db()
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM users WHERE username=%s", (uname,))
+            user = cur.fetchone()
         conn.close()
 
-        if user and check_password_hash(user['password'], password):
-            session['username'] = username
+        if user and check_password_hash(user['password'], passwd):
+            session['user'] = uname
             session['role'] = user['role']
-            if user['role'] == 'admin':
-                return redirect('/admin_dashboard')
-            else:
-                return redirect('/user_dashboard')
-        else:
-            return "Invalid credentials"
-    
+            return redirect('/admin' if user['role'] == 'admin' else '/dashboard')
+        flash("Invalid credentials")
     return render_template('login.html')
 
-@app.route('/logout')
-def logout():
-    # Clear the session data
-    session.clear()
-    return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
-def register():
+def signup():
     if request.method == 'POST':
-        username = request.form['username']
-        password = generate_password_hash(request.form['password'])
-        role = 'user'
+        uname = request.form['username']
+        passwd = generate_password_hash(request.form['password'])
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password, role) VALUES (%s, %s, %s)", (username, password, role))
-        conn.commit()
+        conn = db()
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO users (username, password, role) VALUES (%s, %s, 'user')", (uname, passwd))
+            conn.commit()
         conn.close()
-
+        flash("Registration complete.")
         return redirect('/login')
-        flash("User created successfully. Please login to continue.")
-    
     return render_template('register.html')
 
-@app.route('/user_dashboard')
-def user_dashboard():
-    # Check if user is logged in
-    if 'username' not in session:
-        return redirect(url_for('login'))
-    
-    username = session['username']
-    
-    # Establish a database connection
-    connection = get_db_connection()
-    with connection.cursor() as cursor:
-        # Fetch user's access permissions
-        cursor.execute("SELECT read_access, write_access FROM users WHERE username = %s", (username,))
-        user_permissions = cursor.fetchone()
-        
-    connection.close()
 
-    disk_usage = psutil.disk_usage('/').percent
-    cpu_usage = psutil.cpu_percent(interval=1)
-    # Get RAM Usage
-    ram = psutil.virtual_memory()
-    ram_usage = ram.percent  # Percentage of RAM used
-    
-    # Check permissions
-    if not user_permissions['read_access']:
-        flash("You do not have permission to view files.")
-        return render_template('user_dashboard.html', read_access=False, write_access=False, username=session['username'], disk_usage=disk_usage, cpu_usage=cpu_usage, ram_usage=ram_usage)
-    
-    # Render the dashboard with permissions
-    return render_template(
-        'user_dashboard.html',
-        read_access=user_permissions['read_access'],
-        write_access=user_permissions['write_access'],
-        username=session['username'], disk_usage=disk_usage, cpu_usage=cpu_usage, ram_usage=ram_usage
-    )
+@app.route('/logout')
+def log_out():
+    session.clear()
+    return redirect('/login')
 
-@app.route('/admin_dashboard')
-def admin_dashboard():
-    if 'username' in session and session['role'] == 'admin':
-        # Establish a database connection
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            # Query to select only non-admin users
-            cursor.execute("SELECT username, read_access, write_access FROM users WHERE role != 'admin'")
 
-            users = cursor.fetchall()
-        connection.close()
-        
-        disk_usage = psutil.disk_usage('/').percent
-        cpu_usage = psutil.cpu_percent(interval=1)
-        # Get RAM Usage
-        ram = psutil.virtual_memory()
-        ram_usage = ram.percent  # Percentage of RAM used
-
-        # Get list of backup folders
-        backup_folders = [d for d in os.listdir(BASE_FOLDER_PATH) if d.startswith('backup_') and os.path.isdir(os.path.join(BASE_FOLDER_PATH, d))]
-    
-        return render_template('admin_dashboard.html', username=session['username'], disk_usage=disk_usage, cpu_usage=cpu_usage, ram_usage=ram_usage, users=users, backups=backup_folders)
-    else:
+@app.route('/dashboard')
+def user_home():
+    if 'user' not in session:
         return redirect('/login')
 
-BASE_FOLDER_PATH = 'C:/NAS_Server_Files'  # Change to the folder path for storage
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT read_access, write_access FROM users WHERE username=%s", (session['user'],))
+        perms = cur.fetchone()
+    conn.close()
 
-@app.route('/upload_file', methods=['POST'])
-def upload_file():
-    # Check if the user is logged in
-    if 'username' not in session:
-        flash("Please log in to upload files.")
-        return redirect(url_for('login'))
+    stats = {
+        'disk': psutil.disk_usage('/').percent,
+        'cpu': psutil.cpu_percent(1),
+        'ram': psutil.virtual_memory().percent
+    }
 
-    # Ensure a file was uploaded
-    if 'file' not in request.files:
-        flash("No file selected for uploading.")
-        return redirect(url_for('user_dashboard'))
+    if not perms['read_access']:
+        flash("Read access not granted.")
+        return render_template('user_dashboard.html', **stats, read_access=False, write_access=False, username=session['user'])
 
-    file = request.files['file']
+    return render_template('user_dashboard.html', **stats, read_access=perms['read_access'], write_access=perms['write_access'], username=session['user'])
 
-    # If the user uploaded a file with a valid filename
-    if file.filename == '':
+
+@app.route('/admin')
+def admin_home():
+    if session.get('role') != 'admin':
+        return redirect('/login')
+
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT username, read_access, write_access FROM users WHERE role != 'admin'")
+        users = cur.fetchall()
+    conn.close()
+
+    backups = [f for f in os.listdir(BASE_DIR) if f.startswith('backup_') and os.path.isdir(os.path.join(BASE_DIR, f))]
+    stats = {
+        'disk': psutil.disk_usage('/').percent,
+        'cpu': psutil.cpu_percent(1),
+        'ram': psutil.virtual_memory().percent
+    }
+
+    return render_template('admin_dashboard.html', users=users, backups=backups, username=session['user'], **stats)
+
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'user' not in session or 'file' not in request.files:
+        return redirect('/dashboard')
+
+    f = request.files['file']
+    if f.filename == '':
         flash("No file selected.")
-        return redirect(url_for('user_dashboard'))
-            
-    # Ensure the base folder path exists
-    os.makedirs(BASE_FOLDER_PATH, exist_ok=True)
+        return redirect('/dashboard')
+
+    os.makedirs(BASE_DIR, exist_ok=True)
+    f.save(os.path.join(BASE_DIR, f.filename))
+    flash("Upload complete.")
+    return redirect('/dashboard')
+
+
+@app.route('/folders', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def folders():
+    if request.method == 'POST':
+        name = request.json.get('folderName')
+        os.makedirs(os.path.join(BASE_DIR, name), exist_ok=True)
+        return jsonify(msg='Created')
     
-    # Save the file to the BASE_FOLDER_PATH
-    file_path = os.path.join(BASE_FOLDER_PATH, file.filename)
-    file.save(file_path)
+    if request.method == 'PUT':
+        data = request.json
+        os.rename(os.path.join(BASE_DIR, data['oldFolderName']), os.path.join(BASE_DIR, data['newFolderName']))
+        return jsonify(msg='Renamed')
+    
+    if request.method == 'DELETE':
+        name = request.json.get('folderName')
+        shutil.rmtree(os.path.join(BASE_DIR, name), ignore_errors=True)
+        return jsonify(msg='Deleted')
 
-    flash(f"File '{file.filename}' uploaded successfully.")
-    return redirect(url_for('user_dashboard'))
-
-# Additional routes for file upload, listing, folder management, etc.
+    folders = [d for d in os.listdir(BASE_DIR) if os.path.isdir(os.path.join(BASE_DIR, d))]
+    return jsonify(folders=folders)
 
 
-# Endpoint to create a folder
-@app.route('/create_folder', methods=['POST'])
-def create_folder():
-    folder_name = request.json.get('folderName')
-    folder_path = os.path.join(BASE_FOLDER_PATH, folder_name)
-    try:
-        os.makedirs(folder_path, exist_ok=True)
-        return jsonify(message="Folder created successfully")
-    except Exception as e:
-        return jsonify(message="Error creating folder: " + str(e)), 500
-
-# Endpoint to rename a folder
-@app.route('/rename_folder', methods=['POST'])
-def rename_folder():
-    old_folder_name = request.json.get('oldFolderName')
-    new_folder_name = request.json.get('newFolderName')
-    old_folder_path = os.path.join(BASE_FOLDER_PATH, old_folder_name)
-    new_folder_path = os.path.join(BASE_FOLDER_PATH, new_folder_name)
-    try:
-        os.rename(old_folder_path, new_folder_path)
-        return jsonify(message="Folder renamed successfully")
-    except Exception as e:
-        return jsonify(message="Error renaming folder: " + str(e)), 500
-
-# Endpoint to delete a folder
-@app.route('/delete_folder', methods=['POST'])
-def delete_folder():
-    folder_name = request.json.get('folderName')
-    folder_path = os.path.join(BASE_FOLDER_PATH, folder_name)
-    try:
-        os.rmdir(folder_path)
-        return jsonify(message="Folder deleted successfully")
-    except Exception as e:
-        return jsonify(message="Error deleting folder: " + str(e)), 500
-
-# Endpoint to list all folders
-@app.route('/list_folders', methods=['GET'])
-def list_folders():
-    try:
-        folders = [f for f in os.listdir(BASE_FOLDER_PATH) if os.path.isdir(os.path.join(BASE_FOLDER_PATH, f))]
-        return jsonify(folders=folders)
-    except Exception as e:
-        return jsonify(message="Error listing folders: " + str(e)), 500
-
-@app.route('/list_files', methods=['GET'])
-def list_files():
-    try:
-        files = os.listdir(BASE_FOLDER_PATH)
-        return jsonify({'files': files}), 200
-    except Exception as e:
-        print(f"Error listing files: {e}")
-        return jsonify({'error': 'Could not list files.'}), 500
-
-@app.route('/download_file', methods=['GET'])
-def download_file():
+@app.route('/files', methods=['GET', 'DELETE'])
+def file_ops():
     filename = request.args.get('filename')
-    if filename:
-        try:
-            # Serve the file from the specified directory
-            return send_from_directory(BASE_FOLDER_PATH, filename, as_attachment=True)
-        except FileNotFoundError:
-            return jsonify({'error': 'File not found'}), 404
-    else:
-        return jsonify({'error': 'Filename not specified'}), 400
+    if request.method == 'DELETE' and filename:
+        os.remove(os.path.join(BASE_DIR, filename))
+        return jsonify(msg='File deleted')
+    if request.method == 'GET':
+        return jsonify(files=os.listdir(BASE_DIR))
 
-# Route to delete a file
-@app.route('/delete_file', methods=['DELETE'])
-def delete_file():
-    filename = request.args.get('filename')
-    if filename:
-        file_path = os.path.join(BASE_FOLDER_PATH, filename)
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-                return jsonify({'message': f'{filename} deleted successfully.'}), 200
-            except Exception as e:
-                return jsonify({'error': f'Error deleting {filename}: {str(e)}'}), 500
+
+@app.route('/download')
+def download():
+    fname = request.args.get('filename')
+    return send_from_directory(BASE_DIR, fname, as_attachment=True)
+
+
+@app.route('/backup')
+def backup():
+    if session.get('role') != 'admin':
+        return redirect('/admin')
+
+    now = datetime.now().strftime('%Y%m%d%H%M%S')
+    dest = os.path.join(BASE_DIR, f"backup_{now}")
+    os.makedirs(dest, exist_ok=True)
+
+    for item in os.listdir(BASE_DIR):
+        src = os.path.join(BASE_DIR, item)
+        dst = os.path.join(dest, item)
+        if os.path.isdir(src):
+            shutil.copytree(src, dst)
         else:
-            return jsonify({'error': 'File not found'}), 404
-    else:
-        return jsonify({'error': 'Filename not specified'}), 400
+            shutil.copy2(src, dst)
 
-@app.route('/update_access', methods=['POST'])
-def update_access():
-    username = request.form['username']
-    read_access = request.form.get('read_access') == 'true'
-    write_access = request.form.get('write_access') == 'true'
+    flash("Backup successful.")
+    return redirect('/admin')
+
+
+@app.route('/restore/<bname>')
+def restore(bname):
+    if session.get('role') != 'admin':
+        return redirect('/admin')
     
-    # Update user's permissions in the database
-    cursor = mysql.connection.cursor()
-    cursor.execute("""
-        UPDATE users 
-        SET read_access = %s, write_access = %s 
-        WHERE username = %s
-    """, (read_access, write_access, username))
-    mysql.connection.commit()
-    cursor.close()
-
-    return jsonify({"success": True, "message": "Access updated successfully"})
-
-@app.route('/delete_user', methods=['POST'])
-def delete_user():
-    # Check if the admin is logged in
-    if 'username' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-
-    # Get the username to delete from the form
-    username_to_delete = request.form['username']
-
-    # Connect to the database and delete the user
-    connection = get_db_connection()
-    with connection.cursor() as cursor:
-        cursor.execute("DELETE FROM users WHERE username = %s", (username_to_delete,))
-        connection.commit()
-    connection.close()
-
-    flash(f"User '{username_to_delete}' has been deleted.", "success")
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/apply_changes', methods=['POST'])
-def apply_changes():
-    # Check if the admin is logged in
-    if 'username' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-
-    # Get the values from the form
-    username = request.form['username']
-    read_access = request.form['read_access'] == 'true'
-    write_access = request.form['write_access'] == 'true'
-
-    # Update the user's permissions in the database
-    connection = get_db_connection()
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            UPDATE users
-            SET read_access = %s, write_access = %s
-            WHERE username = %s
-        """, (read_access, write_access, username))
-        connection.commit()
-    connection.close()
-
-    # Send a success message back to the front-end
-    return jsonify({'message': f"Permissions for '{username}' have been updated."})
-
-# Route for creating a backup
-@app.route('/backup_files')
-@login_required
-def backup_files():
-    if not current_user.is_admin:
-        flash("You do not have permission to perform this action.", "danger")
-        return redirect(url_for('admin_dashboard'))
-    
-    # Create a new backup folder with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    backup_folder = os.path.join(BASE_FOLDER_PATH, f"backup_{timestamp}")
-
-    try:
-        # Create backup directory
-        os.makedirs(backup_folder)
-
-        # Copy all files and folders from NAS_Server_Files to the new backup folder
-        for item in os.listdir(BASE_FOLDER_PATH):
-            s = os.path.join(BASE_FOLDER_PATH, item)
-            d = os.path.join(backup_folder, item)
-            if os.path.isdir(s):
-                shutil.copytree(s, d)
-            else:
-                shutil.copy2(s, d)
-
-        flash(f"Backup created successfully in folder: {backup_folder}", "success")
-    except Exception as e:
-        flash(f"Error during backup: {str(e)}", "danger")
-    
-    return redirect(url_for('admin_dashboard'))
+    zip_path = shutil.make_archive(os.path.join(BASE_DIR, bname), 'zip', os.path.join(BASE_DIR, bname))
+    return send_from_directory(BASE_DIR, os.path.basename(zip_path), as_attachment=True)
 
 
-# Route for restoring backup
-@app.route('/restore_backup/<backup_folder>', methods=['GET'])
-@login_required
-def restore_backup(backup_folder):
-    if not current_user.is_admin:
-        flash("You do not have permission to perform this action.", "danger")
-        return redirect(url_for('admin_dashboard'))
+@app.route('/permissions', methods=['POST'])
+def update_permissions():
+    uname = request.form['username']
+    read = request.form.get('read_access') == 'true'
+    write = request.form.get('write_access') == 'true'
 
-    backup_folder_path = os.path.join(BASE_FOLDER_PATH, backup_folder)
-    
-    if not os.path.exists(backup_folder_path):
-        flash("Backup folder does not exist.", "danger")
-        return redirect(url_for('admin_dashboard'))
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("UPDATE users SET read_access=%s, write_access=%s WHERE username=%s", (read, write, uname))
+        conn.commit()
+    conn.close()
 
-    # Send all files in the backup folder as a zip file
-    try:
-        # Create a zip file of the backup folder
-        shutil.make_archive(backup_folder_path, 'zip', backup_folder_path)
-        zip_file = f"{backup_folder_path}.zip"
-        
-        return send_from_directory(directory=os.path.dirname(zip_file), path=os.path.basename(zip_file), as_attachment=True)
-    
-    except Exception as e:
-        flash(f"Error during restore: {str(e)}", "danger")
-        return redirect(url_for('admin_dashboard'))
+    return jsonify(msg="Permissions updated")
 
 
+@app.route('/remove_user', methods=['POST'])
+def remove_user():
+    uname = request.form['username']
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM users WHERE username=%s", (uname,))
+        conn.commit()
+    conn.close()
+    flash(f"{uname} removed.")
+    return redirect('/admin')
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app.run(debug=True)
